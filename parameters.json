@@ -1,0 +1,5 @@
+{
+  "File": "test_vcf.vcf",
+  "Species": "human",
+  "Chunk_size": 100
+}

@@ -4,6 +4,21 @@ from vcf_parser import VCFParser
 
 
 def parse_vcf_file(file):
+    """
+    Parse .vcf file into a pd.DataFrame containing defined list of columns. Columns are:
+    'ID' SPDI notation
+    'CHROM' Chromosome on which variant is located
+    'POS' Position of the variant
+    'REF' Reference allele
+    'ALT' Alternative allele
+    'TC' Total coverage at this locus
+    'TR' Total number of reads containing this variant
+    'AR' Total number of reads containing alternative variant
+    'WS' Starting position of calling window
+    'WE' End position of calling window
+    :param file: .vcf file
+    :return: pd.DataFrame with information from .vcf file
+    """
     my_parser = VCFParser(infile=file, split_variants=True, check_info=True)
 
     variants = []
@@ -21,18 +36,62 @@ def parse_vcf_file(file):
         variant['WE'] = variant['info_dict']['WE'][0]
 
         # This is a REST-style regions to query EnsEMBL by
-        variant['ID'] = f"{variant['CHROM']}:{variant['WS']}:{variant['WE']}/{variant['REF']}"
-
+        # variant['ID'] = f"{variant['CHROM']}:{variant['WS']}:{variant['WE']}/{variant['REF']}"
+        variant['ID'] = f"{variant['CHROM']} {variant['POS']} . {variant['REF']} {variant['ALT']} . . ."
     variants = pd.DataFrame(variants)
     variants = variants.loc[:, ['ID', 'CHROM', 'POS', 'REF', 'ALT', 'TC', 'TR', 'AR', 'WS', 'WE']]
     return variants
 
 
-def get_response(request):
-    url = f'https://rest.ensembl.org/vep/ornithorhynchus_anatinus/region/'
+def get_response(request, species, chunk_size=100):
+    """
+    Get response from EnsEMBL REST API for a certain variant using SPDI notation list as input
+    :param request: List of variants in SPDI notation
+    :param species: Species for which query is run
+    :param chunk_size: Chunk to which list is split in separate blocks to be sent by post request
+    :return: List of responses
+    """
+    url = f'https://rest.ensembl.org/vep/{species}/region/'
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    responses = []
+    for i in range(0, len(request), chunk_size):
+        chunk = request[i:i + chunk_size]
+        chunk = '{' + f'''"variants": ["{'", "'.join(chunk)}"]''' + '}'
+        response = requests.post(url, headers=headers, data=chunk)
+        if response:
+            response = response.json()
+            responses.extend(response)
+            continue
 
-    response = requests.post(url, headers=headers, data=request)
+    return responses
 
-    data = response.json()
-    return data
+
+def process_response(data):
+    input = {}
+    output = {}
+    for response in data:
+
+        input_id = response['input']
+
+        for consequences in ['intergenic_consequences',
+                             'transcript_consequences',
+                             'regulatory_feature_consequences']:
+            if consequences in response.keys():
+                input[consequences] = response[consequences]
+
+        for key, value in input.items():
+            output[input_id, key] = {}
+            for d in value:
+                output[input_id, key]['allele'] = d['variant_allele']
+                if 'gene_symbol' in d.keys():
+                    output[input_id, key]['gene_symbol'] = d['gene_symbol']
+                else:
+                    output[input_id, key]['gene_symbol'] = ''
+                if 'consequence_terms' in d.keys():
+                    output[input_id, key]['consequence_terms'] = ', '.join(d['consequence_terms'])
+                else:
+                    output[input_id, key]['consequence_terms'] = ''
+
+        output = pd.DataFrame.from_dict(output, orient="index")
+        output = output.reset_index(names=['ID', 'consequences_group'])
+    return output
