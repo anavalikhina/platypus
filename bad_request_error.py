@@ -1,6 +1,7 @@
 import requests, sys
 
-# for some reason I have 400 bad request error even with the example code
+# For some reason I have 400 bad request error even with the example code.
+# This issue is found only for platypus, but not for human.
 server = "https://grch37.rest.ensembl.org"
 ext = "/vep/ornithorhynchus_anatinus/region/X:153994586:153994604/G"
 
