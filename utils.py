@@ -110,6 +110,7 @@ def process_response(data):
                 else:
                     output[input_id, key]["consequence_terms"] = ""
 
-        output = pd.DataFrame.from_dict(output, orient="index")
+        output = pd.DataFrame(output)
+        output = output.T
         output = output.reset_index(names=["ID", "consequences_group"])
     return output
