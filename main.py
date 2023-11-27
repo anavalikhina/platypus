@@ -10,7 +10,6 @@ variants = parse_vcf_file(file=parameters["File"])
 
 # requesting EnsEMBL DB
 request = variants["ID"].values.tolist()
-# Species here is human, because for platypus I got 400 error (see bad_request_error.py)
 response = get_response(
     request, species=parameters["Species"], chunk_size=parameters["Chunk_size"]
 )
